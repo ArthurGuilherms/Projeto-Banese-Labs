@@ -2,14 +2,16 @@ import pandas as pd
 import psycopg2
 import os
 from tkinter import Tk, filedialog, messagebox
+from dotenv import load_dotenv
 
 # Conexão com o PostgreSQL
+load_dotenv()
 conexao = psycopg2.connect(
-  user="postgres",
-  host="localhost",
-  database="world",
-  password="123456",
-  port="5432",
+  user=os.getenv("USER"),
+  host=os.getenv("HOST"),
+  database=os.getenv("DATABASE"),
+  password=os.getenv("PASSWORD"),
+  port=os.getenv("PORT"),
 )
 cursor = conexao.cursor()
 
