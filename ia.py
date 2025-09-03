@@ -4,12 +4,12 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import psycopg2
 
-# Carrega variáveis do arquivo .env
-load_dotenv() 
+
 
 app = Flask(__name__)
 
 # Conexão com o PostgreSQL
+load_dotenv() 
 conexao = psycopg2.connect(
   user=os.getenv("USER"),
   host=os.getenv("HOST"),
