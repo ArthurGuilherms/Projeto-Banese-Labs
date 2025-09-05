@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Banese Credit Insights</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="icon" href="/images/banese-logo-3d.png" type="image/png">
+</head>
+
+<body>
+  <header class="navbar">
+    <nav>
+      <ul class="logo-container">
+        <li>
+          <img src="images/logo.banese.white_.vertical.svg" alt="Banco Banese" class="logo-banese">
+        </li>
+        <li>
+          <div class="logo"> Credit Insights</div>
+        </li>
+      </ul>
+    </nav>
+    <nav>
+      <ul>
+        <li><a href="/" class="active">Empresas</a></li>
+        <li><a href="/analise?id=5001">Análises</a></li>
+      </ul>
+    </nav>
+    <div class="perfil">
+      <div class="notification-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+      </div>
+      <div class="avatar"></div>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1>Empresas</h1>
+
+    <div class="search-bar">
+      <input type="text" id="campoPesquisa" placeholder="Pesquisar empresas por nome ou ID...">
+      <button id="botaoPesquisar">Pesquisar</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Score de Crédito</th>
+          <th>ID</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% empresas.forEach(e=> { %>
+          <tr>
+            <td>
+              <%= e.empresa %>
+            </td>
+            <td class="score <%= e.cor %>">
+              <%= e.rating %>
+            </td>
+            <td>
+              <%= e.id %>
+            </td>
+            <td><a href="/analise?id=<%= e.id %>">Ver</a></td>
+          </tr>
+          <% }) %>
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    function definirCor(rating) {
+      const ratingsVerde = ["A+", "A", "A-", "B+", "B"];
+      const ratingsAmarelo = ["B-", "C", "C+"];
+      const ratingsVermelho = ["C-", "D+", "D", "D-"];
+
+      if (ratingsVerde.includes(rating)) return "green";
+      if (ratingsAmarelo.includes(rating)) return "yellow";
+      if (ratingsVermelho.includes(rating)) return "red";
+      return "";
+    }
+
+    document.getElementById('botaoPesquisar').onclick = async function () {
+      const termo = document.getElementById('campoPesquisa').value.trim();
+      if (!termo) return;
+
+      const resp = await fetch(`/api/pesquisar?q=${encodeURIComponent(termo)}`);
+      const empresas = await resp.json();
+
+      const tbody = document.querySelector('tbody');
+      tbody.innerHTML = empresas.map(e => {
+        const cor = definirCor(e.rating);
+        return `
+          <tr>
+            <td>${e.empresa}</td>
+            <td class="score ${cor}">${e.rating}</td>
+            <td>${e.id}</td>
+            <td><a href="/analise?id=${e.id}">Ver</a></td>
+          </tr>
+        `;
+      }).join('');
+    };
+  </script>
+</body>
+
+</html>

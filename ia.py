@@ -1,129 +1,130 @@
-import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 import google.generativeai as genai
+import os
 from dotenv import load_dotenv
-import psycopg2
-
-
+import json
 
 app = Flask(__name__)
 
-# Conexão com o PostgreSQL
-load_dotenv() 
-conexao = psycopg2.connect(
-  user=os.getenv("USER"),
-  host=os.getenv("HOST"),
-  database=os.getenv("DATABASE"),
-  password=os.getenv("PASSWORD"),
-  port=os.getenv("PORT"),
-)
-cursor = conexao.cursor()
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
-# Configuração da API do Gemini 
+SYSTEM_INSTRUCTION_ANALISTA = """
+Você é uma Assistente de Análise de Crédito Inteligente, com o objetivo de otimizar o processo de concessão de empréstimos a pequenas e médias empresas.
+Sintetize informações, identifique riscos e oportunidades não óbvios nos dados.
+Forneça um relatório curto com respostas claras, concisas e baseadas em dados.
+Verifique como está o setor da empresa em questão se há oportunidades no momento ou riscos emergentes.
+
+Informações relevantes:
+Empresa: Nome da empresa. 
+Receita Anual: Receita total anual da empresa(número inteiro).
+Dívida Total: Total de dívida que a empresa possui(número inteiro).
+Prazo de Pagamento(dias): Dias que a empresa leva para pagar suas dívidas(número inteiro).
+Setor: Categoria em que a empresa opera(string).
+Rating: Avaliação de crédito da empresa(string).
+Notícias Recentes: Resumo de notícias relevantes sobre a empresa(s)
+
+Gere justificativas e recomendações preliminares para a concessão ou recusa de crédito.
+Forneça a recomendação preliminar e explique brevemente o motivo.
+Ajuste os valores monetários com R$ e . para milhar e , para decimal.
+
+Siga o seguinte padrão:
+<p><strong>Recomendação Preliminar:</strong></p> - INSIRA A RECOMENDAÇÃO AQUI -
+<p><strong>Justificativa:</strong></p> - INSIRA A JUSTIFICATIVA AQUI -
+"""
+
+SYSTEM_INSTRUCTION_ESPECIALISTA = """
+Você é um Assistente de Análise de Crédito Inteligente para concessão de empréstimos a pequenas e médias empresas (PMEs). Sua função é receber dados, e com base neles, definir uma proposta de crédito inicial. A justificativa deve ser coerente com a análise prévia de se o crédito deve ser aprovado, reprovado, aprovado com ressalvas e etc.
+
+Sua resposta DEVE SER APENAS um objeto JSON, sem nenhum texto ou formatação adicional.
+O JSON deve ter EXATAMENTE as seguintes chaves:
+- "valor_sugerido": um número (integer) representando o valor recomendado do empréstimo.
+- "taxa_juros": um número (float) representando a taxa de juros mensal recomendada (ex: 1.5 para 1.5%).
+- "prazo_pagamento": um número (integer) representando o prazo recomendado em meses.
+- "justificativa": uma string curta e clara (máximo 2 frases) explicando o porquê dos valores sugeridos, ou porque não foram sugeridos.
+
+Analise a receita, dívida, rating e a análise qualitativa para definir valores coerentes. 
+"""
+
+model_analista = None
+model_especialista = None
+
 try:
-    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("Chave da API do Gemini não encontrada. Defina a variável de ambiente GEMINI_API_KEY.")
     genai.configure(api_key=api_key)
-except ValueError as e:
-    print(f"Erro de configuração: {e}")
-    api_key = None 
+
+    model_analista = genai.GenerativeModel(
+        model_name='gemini-1.5-flash',
+        system_instruction=SYSTEM_INSTRUCTION_ANALISTA
+    )
+    
+    model_especialista = genai.GenerativeModel( 
+        model_name='gemini-1.5-flash',
+        system_instruction=SYSTEM_INSTRUCTION_ESPECIALISTA
+    )
+
+except Exception as e:
+    print(f"Erro ao inicializar os modelos Gemini: {e}")
 
 
-# Configurações de Segurança do Gemini 
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE", 
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE",
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE", 
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE",
-    },
-]
+@app.route('/analisar', methods=['POST'])
+def analisar():
+    if not model_analista:
+        return jsonify({"erro": "O modelo Analista de IA não foi inicializado corretamente."}), 500
 
-# Instrução do Sistema
-SYSTEM_INSTRUCTION = """
-Você é uma Assistente de Análise de Crédito Inteligente, com o objetivo de otimizar o processo de concessão de empréstimos a pequenas e médias empresas.
-Sintetize informações, identifique riscos e oportunidades não óbvios nos dados.
-Forneça um relatório curto com respostas claras, concisas e baseadas em dados, evitando jargões técnicos.
-Gere justificativas e recomendações preliminares para a concessão ou recusa de crédito.
-A PRIORIDADE É SER UM RELATÓRIO CURTO COM O ESSENCIAL PARA QUE O USUARIO TOME DECISÕES INFORMADAS.
-Forneça apenas a recomendação preliminar e explique brevemente o motivo, sem mais delongas.
+    dados = request.json
+    prompt = f"""
+    Empresa: {dados.get('empresa', 'N/A')}
+    Receita Anual: {dados.get('receita_anual', 'N/A')}
+    Dívida Total: {dados.get('divida_total', 'N/A')}
+    Prazo de Pagamento: {dados.get('prazo_pagamento', 'N/A')}
+    Setor: {dados.get('setor', 'N/A')}
+    Rating: {dados.get('rating', 'N/A')}
+    Notícias Recentes: {dados.get('noticias_recentes', 'N/A')}
+    """
 
-Siga o seguinte padrão:
-**Recomendação Preliminar:** - INSIRA A RECOMENDAÇÃO AQUI -
-
-**Justificativa:** - INSIRA A JUSTIFICATIVA AQUI -
-"""
-
-# Inicialização do Modelo Generativo 
-model = None
-if api_key:
     try:
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash', 
-            safety_settings=safety_settings,
-            system_instruction=SYSTEM_INSTRUCTION
-        )
+        resposta = model_analista.generate_content(prompt)
+        return jsonify({"analise": resposta.text})
     except Exception as e:
-        print(f"Erro ao inicializar o modelo Gemini: {e}")
-        model = None 
+        return jsonify({"erro": str(e)}), 500
 
 
-# Função para buscar dados de uma empresa
-def buscar_empresa(nome_empresa):
-    cursor.execute("SELECT empresa, receita_anual, divida_total, prazo_pagamento, setor, rating, noticias_recentes FROM empresas WHERE empresa=%s", (nome_empresa,))
-    resultado = cursor.fetchone()
-    if resultado:
-        campos = ["Empresa", "Receita Anual", "Dívida Total", "Prazo de Pagamento (dias)", "Setor", "Rating", "Notícias Recentes"]
-        dados = dict(zip(campos, resultado))
-        return dados
-    else:
-        print(f"Empresa '{nome_empresa}' não encontrada.")
-        return None
+@app.route('/sugerir_credito', methods=['POST'])
+def sugerir_credito():
+    if not model_especialista:
+        return jsonify({"erro": "O modelo Especialista de IA não foi inicializado corretamente."}), 500
 
-# Função para gerar prompt para IA
-def gerar_prompt(dados_empresa):
-    prompt_financeiro = f"""
-    Você é um consultor financeiro de análise de crédito para banco. Analise os dados a seguir da empresa e forneça recomendações de ação:
+    dados = request.json
+    analise_texto = dados.get('analise')
+    dados_empresa = dados.get('dados_empresa')
 
-    Empresa: {dados_empresa['Empresa']}
-    Receita Anual: {dados_empresa['Receita Anual']}
-    Dívida Total: {dados_empresa['Dívida Total']}
-    Prazo de Pagamento (dias): {dados_empresa['Prazo de Pagamento (dias)']}
-    Setor: {dados_empresa['Setor']}
-    Rating: {dados_empresa['Rating']}
-    Notícias Recentes: {dados_empresa['Notícias Recentes']}
+    if not analise_texto or not dados_empresa:
+        return jsonify({"erro": "Dados da empresa e texto da análise são obrigatórios."}), 400
 
-    Por favor, forneça uma análise detalhada e sugestões sobre como a empresa deve proceder.
+    prompt = f"""
+    ## Dados da Empresa:
+    - Receita Anual: {dados_empresa.get('receita_anual')}
+    - Dívida Total: {dados_empresa.get('divida_total')}
+    - Prazo de Pagamento: {dados_empresa.get('prazo_pagamento')} meses
+    - Rating: {dados_empresa.get('rating')}
+    - Setor: {dados_empresa.get('setor')}
+
+    ## Análise Qualitativa Recebida:
+    {analise_texto}
+
+    Com base em TUDO isso, gere a sugestão de crédito em formato JSON.
     """
-    return prompt_financeiro
-
-# Função para gerar uma análise financeira
-def analise(prompt_financeiro):
-    """
-    Usa o modelo Gemini para gerar uma análise financeira baseada no prompt fornecido.
-    """
-    if not model:
-        return "O modelo Gemini não foi inicializado corretamente."
+    
     try:
-        resposta = model.generate_content(prompt_financeiro)
-        return resposta.text
+        resposta = model_especialista.generate_content(prompt)
+        json_text = resposta.text.strip().replace("```json", "").replace("```", "")
+        sugestao = json.loads(json_text)
+        return jsonify(sugestao)
     except Exception as e:
-        print(f"Erro ao gerar análise com Gemini: {e}")
-        return "Erro ao gerar análise financeira."
+        print(f"Erro ao gerar ou processar sugestão: {e}")
+        return jsonify({"erro": "Não foi possível gerar a sugestão de crédito."}), 500
 
-# Teste (Escolha uma empresa de 1 a 5000)
-nome_empresa = "Empresa 2"
-dados_empresa = buscar_empresa(nome_empresa)
-prompt_financeiro = gerar_prompt(dados_empresa)
-print(analise(prompt_financeiro))
+if __name__ == "__main__":
+    app.run(port=5001, debug=True)

@@ -1,1 +1,29 @@
-{}
+{
+  "name": "projeto-banese-labs",
+  "version": "1.0.0",
+  "description": "Um Assistente de Análise de Crédito Inteligente, com o objetivo de otimizar o processo de concessão de empréstimos a pequenas e médias empresas.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArthurGuilherms/Projeto-Banese-Labs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ArthurGuilherms/Projeto-Banese-Labs/issues"
+  },
+  "homepage": "https://github.com/ArthurGuilherms/Projeto-Banese-Labs#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.16.3"
+  },
+  "type": "module"
+}

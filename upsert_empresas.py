@@ -4,7 +4,6 @@ import os
 from tkinter import Tk, filedialog, messagebox
 from dotenv import load_dotenv
 
-# Conexão com o PostgreSQL
 load_dotenv()
 conexao = psycopg2.connect(
   user=os.getenv("USER"),
@@ -15,7 +14,6 @@ conexao = psycopg2.connect(
 )
 cursor = conexao.cursor()
 
-# Função de UPSERT para inserir ou atualizar dados da empresa
 def upsert_empresa(df):
     for _, row in df.iterrows():
         cursor.execute("""
@@ -40,7 +38,6 @@ def upsert_empresa(df):
         ))
     conexao.commit()
 
-# Função para carregar diferentes formatos
 def carregar_dados(caminho_arquivo):
     extensao = os.path.splitext(caminho_arquivo)[1].lower()
     if extensao == '.csv':
@@ -54,7 +51,6 @@ def carregar_dados(caminho_arquivo):
     else:
         raise ValueError(f"Formato de arquivo {extensao} não suportado.")
 
-# Função principal
 def selecionar_e_processar():
     Tk().withdraw() 
     caminho_arquivo = filedialog.askopenfilename(
@@ -74,6 +70,5 @@ def selecionar_e_processar():
     except Exception as e:
         messagebox.showerror("Erro", f"Ocorreu um erro: {e}")
 
-# Execução do processo
 if __name__ == "__main__":
     selecionar_e_processar()
